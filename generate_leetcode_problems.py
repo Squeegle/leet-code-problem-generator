@@ -3,6 +3,7 @@ import requests
 from typing import List, Dict, Set
 import random
 from problem_tracker import ProblemTracker
+import os
 
 class LeetCodeProblem:
     def __init__(self, title: str, description: str, difficulty: str, 
@@ -182,15 +183,43 @@ Output: [0,1]""",
         )
     ]
 
-def create_notebook_content(problems: List[LeetCodeProblem]) -> dict:
-    cells = []
+def read_existing_notebook() -> dict:
+    """Read the existing notebook if it exists."""
+    if os.path.exists('leetcode_practice.ipynb'):
+        with open('leetcode_practice.ipynb', 'r') as f:
+            return json.load(f)
+    return None
+
+def get_completed_problems_count(notebook: dict) -> int:
+    """Count how many problems have been completed in the notebook."""
+    if not notebook:
+        return 0
     
-    # Add title cell
-    cells.append({
-        "cell_type": "markdown",
-        "metadata": {},
-        "source": ["# LeetCode Practice Problems\n\nThis notebook contains LeetCode problems fetched from the official LeetCode API."]
-    })
+    completed = 0
+    for cell in notebook['cells']:
+        if cell['cell_type'] == 'code' and 'outputs' in cell:
+            # Check if the cell has been executed and contains a success message
+            for output in cell['outputs']:
+                if 'text' in output and 'All test cases passed!' in output['text']:
+                    completed += 1
+                    break
+    return completed
+
+def create_notebook_content(problems: List[LeetCodeProblem], existing_notebook: dict = None) -> dict:
+    """Create notebook content, appending to existing notebook if provided."""
+    if existing_notebook:
+        cells = existing_notebook['cells']
+        # Remove the title cell if it exists
+        if cells and cells[0]['cell_type'] == 'markdown' and '# LeetCode Practice Problems' in cells[0]['source'][0]:
+            cells = cells[1:]
+    else:
+        cells = []
+        # Add title cell for new notebook
+        cells.append({
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["# LeetCode Practice Problems\n\nThis notebook contains LeetCode problems fetched from the official LeetCode API."]
+        })
     
     # Add each problem
     for i, problem in enumerate(problems, 1):
@@ -255,11 +284,33 @@ def create_notebook_content(problems: List[LeetCodeProblem]) -> dict:
     return notebook
 
 def main():
-    problems = generate_problems()
-    notebook = create_notebook_content(problems)
+    # Read existing notebook
+    existing_notebook = read_existing_notebook()
     
+    # Check if there are uncompleted problems
+    if existing_notebook:
+        completed_count = get_completed_problems_count(existing_notebook)
+        total_problems = len([cell for cell in existing_notebook['cells'] 
+                            if cell['cell_type'] == 'markdown' and '## Problem' in cell['source'][0]])
+        
+        if completed_count < total_problems:
+            print(f"You have {total_problems - completed_count} uncompleted problems. Please complete them before generating new ones.")
+            return
+    
+    # Generate new problems
+    problems = generate_problems()
+    if not problems:
+        print("No new problems to add.")
+        return
+    
+    # Create new notebook content
+    notebook = create_notebook_content(problems, existing_notebook)
+    
+    # Write the notebook
     with open('leetcode_practice.ipynb', 'w') as f:
         json.dump(notebook, f, indent=1)
+    
+    print(f"Added {len(problems)} new problems to the notebook.")
 
 if __name__ == "__main__":
     main() 
